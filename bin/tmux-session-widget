@@ -1,135 +1,179 @@
 #!/usr/bin/env bash
 
-# Session widget for tmux status bar and other use cases
-# Provides session information in various formats
+# Session widget for tmux status-line and popups.
+# Formats: basename | index | list | compact | name | truncated | dots
+# Uses a cached session list to avoid repeated tmux calls and keeps
+# running even when a session has no session_path (falls back to name).
 
-# Function to get session path basename
-get_session_basename() {
-    local session_name=${1:-$(tmux display-message -p '#S')}
-    local session_path=$(tmux list-sessions -F "#{session_name}:#{session_path}" | grep "^$session_name:" | cut -d: -f2-)
-    basename "$session_path"
+cached_sessions=()
+cached_paths=()
+
+refresh_session_cache() {
+  cached_sessions=()
+  cached_paths=()
+  # Format: "name:path" (path may be empty)
+  while IFS=: read -r name path; do
+    cached_sessions+=("$name")
+    cached_paths+=("$path")
+  done < <(tmux list-sessions -F '#{session_name}:#{session_path}' | sort)
 }
 
-# Function to get current session index
-get_current_session_index() {
-    local current_session=$(tmux display-message -p '#S')
-    local sessions=($(tmux list-sessions -F '#S' | sort))
-    
-    for i in "${!sessions[@]}"; do
-        if [[ "${sessions[$i]}" == "$current_session" ]]; then
-            echo $i
-            return
-        fi
-    done
-    echo 0
-}
-
-# Function to create session list for display
-create_session_list() {
-    local current_index=${1:-$(get_current_session_index)}
-    local sessions=($(tmux list-sessions -F '#S' | sort))
-    local output=""
-    
-    for i in "${!sessions[@]}"; do
-        local session="${sessions[$i]}"
-        local session_path=$(tmux list-sessions -F "#{session_name}:#{session_path}" | grep "^$session:" | cut -d: -f2-)
-        local display_name=$(basename "$session_path")
-        
-        if [[ $i -eq $current_index ]]; then
-            output+="#[fg=black,bg=cyan,bold] $display_name #[default]\n"
-        else
-            output+="#[fg=blue] $display_name #[default]\n"
-        fi
-    done
-    
-    echo -e "$output"
-}
-
-# Function to get session count
 get_session_count() {
-    tmux list-sessions | wc -l | tr -d ' '
+  if [[ ${#cached_sessions[@]} -eq 0 ]]; then
+    refresh_session_cache
+  fi
+  echo "${#cached_sessions[@]}"
 }
 
-# Function to get session info with indicators
+get_current_session_index() {
+  local current_session
+  current_session=$(tmux display-message -p '#S')
+
+  if [[ ${#cached_sessions[@]} -eq 0 ]]; then
+    refresh_session_cache
+  fi
+
+  for i in "${!cached_sessions[@]}"; do
+    if [[ "${cached_sessions[$i]}" == "$current_session" ]]; then
+      echo "$i"
+      return
+    fi
+  done
+  echo 0
+}
+
+get_session_basename() {
+  local session_name=${1:-$(tmux display-message -p '#S')}
+
+  if [[ ${#cached_sessions[@]} -eq 0 ]]; then
+    refresh_session_cache
+  fi
+
+  for i in "${!cached_sessions[@]}"; do
+    if [[ "${cached_sessions[$i]}" == "$session_name" ]]; then
+      local path="${cached_paths[$i]}"
+      if [[ -n "$path" ]]; then
+        basename "$path"
+      else
+        echo "$session_name"
+      fi
+      return
+    fi
+  done
+
+  # Fallback if cache missed
+  basename "$(tmux display-message -p '#{session_path}')" 2>/dev/null || echo "$session_name"
+}
+
+create_session_list() {
+  local current_index=${1:-$(get_current_session_index)}
+
+  if [[ ${#cached_sessions[@]} -eq 0 ]]; then
+    refresh_session_cache
+  fi
+
+  local output=""
+  for i in "${!cached_sessions[@]}"; do
+    local name="${cached_sessions[$i]}"
+    local path="${cached_paths[$i]}"
+    local display_name
+    if [[ -n "$path" ]]; then
+      display_name=$(basename "$path")
+    else
+      display_name="$name"
+    fi
+
+    if [[ $i -eq $current_index ]]; then
+      output+="#[fg=black,bg=cyan,bold] $display_name #[default]\n"
+    else
+      output+="#[fg=blue] $display_name #[default]\n"
+    fi
+  done
+
+  echo -e "$output"
+}
+
 get_session_info() {
-    local format=${1:-"basename"}
-    local max_width=${2:-0}
-    local current_session=$(tmux display-message -p '#S')
-    local session_count=$(get_session_count)
-    local current_index=$(get_current_session_index)
-    
-    case "$format" in
-        "basename")
-            get_session_basename
-            ;;
-        "index")
-            echo "$((current_index + 1))/$session_count"
-            ;;
-        "list")
-            if [[ $max_width -gt 0 ]]; then
-                create_session_list | head -c $max_width
-            else
-                create_session_list
-            fi
-            ;;
-        "compact")
-            local basename=$(get_session_basename)
-            echo "◆ $basename ($((current_index + 1))/$session_count)"
-            ;;
-        "name")
-            echo "$current_session"
-            ;;
-        "truncated")
-            local terminal_width=$(tmux display-message -p '#{client_width}')
-            local available_width=$((terminal_width - 30))  # Reserve 30 chars for time/other
-            create_session_list | tr -d '\n' | head -c $available_width
-            if [[ ${#output} -ge $available_width ]]; then
-                echo -n "..."
-            fi
-            ;;
-        "dots")
-            local sessions=($(tmux list-sessions -F '#S' | sort))
-            local current_index=$(get_current_session_index)
-            local total=${#sessions[@]}
-            local output=""
-            
-            for i in "${!sessions[@]}"; do
-                # Add separator every 5 sessions
-                if [[ $i -gt 0 && $((i % 5)) -eq 0 ]]; then
-                    output+="#[fg=colour7]│#[default]"
-                fi
-                
-                if [[ $i -eq $current_index ]]; then
-                    output+="#[fg=cyan,bold]█#[default]"
-                else
-                    output+="#[fg=colour8]▒#[default]"
-                fi
-            done
-            
-            # Add fraction with padding to prevent layout shift
-            local total_digits=${#total}
-            local current_num=$((current_index+1))
-            local current_digits=${#current_num}
-            local padding=$((total_digits - current_digits))
-            local padded_current=""
-            
-            # Add leading spaces for alignment
-            for ((j=0; j<padding; j++)); do
-                padded_current+=" "
-            done
-            padded_current+="$current_num"
-            
-            output+=" #[fg=cyan,bold]$padded_current/$total#[default]"
-            echo "$output"
-            ;;
-        *)
-            echo "Usage: $0 {basename|index|list|compact|name|truncated|dots}"
-            exit 1
-            ;;
-    esac
+  local format=${1:-"basename"}
+  local max_width=${2:-0}
+  # Always refresh to reflect new/removed sessions when status-line is redrawn
+  refresh_session_cache
+  local session_count
+  session_count=$(get_session_count)
+  local current_index
+  current_index=$(get_current_session_index)
+
+  case "$format" in
+    basename)
+      get_session_basename
+      ;;
+    index)
+      echo "$((current_index + 1))/$session_count"
+      ;;
+    list)
+      if [[ $max_width -gt 0 ]]; then
+        create_session_list | head -c "$max_width"
+      else
+        create_session_list
+      fi
+      ;;
+    compact)
+      local bn
+      bn=$(get_session_basename)
+      echo "◆ $bn ($((current_index + 1))/$session_count)"
+      ;;
+    name)
+      if [[ ${#cached_sessions[@]} -eq 0 ]]; then
+        refresh_session_cache
+      fi
+      echo "${cached_sessions[$current_index]}"
+      ;;
+    truncated)
+      local terminal_width available_width flat
+      terminal_width=$(tmux display-message -p '#{client_width}')
+      available_width=$((terminal_width - 30))  # reserve space for time/other parts
+      flat=$(create_session_list | tr -d '\n')
+      if [[ ${#flat} -gt $available_width ]]; then
+        echo -n "${flat:0:available_width}..."
+      else
+        echo -n "$flat"
+      fi
+      ;;
+    dots)
+      if [[ ${#cached_sessions[@]} -eq 0 ]]; then
+        refresh_session_cache
+      fi
+      local total=${#cached_sessions[@]}
+      local output=""
+      for i in "${!cached_sessions[@]}"; do
+        if [[ $i -gt 0 && $((i % 5)) -eq 0 ]]; then
+          output+="#[fg=colour7]│#[default]"
+        fi
+        if [[ $i -eq $current_index ]]; then
+          output+="#[fg=cyan,bold]█#[default]"
+        else
+          output+="#[fg=colour8]▒#[default]"
+        fi
+      done
+      local total_digits=${#total}
+      local current_num=$((current_index + 1))
+      local current_digits=${#current_num}
+      local padding=$((total_digits - current_digits))
+      local padded_current=""
+      for ((j=0; j<padding; j++)); do
+        padded_current+=" "
+      done
+      padded_current+="$current_num"
+      output+=" #[fg=cyan,bold]$padded_current/$total#[default]"
+      echo "$output"
+      ;;
+    *)
+      echo "Usage: $0 {basename|index|list|compact|name|truncated|dots}"
+      return 1
+      ;;
+  esac
 }
 
-# Main entry point
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    get_session_info "$1"
+  get_session_info "$@"
 fi

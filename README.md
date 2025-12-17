@@ -18,7 +18,7 @@
 
 ![Demo GIF](https://user-images.githubusercontent.com/…/demo.gif)
 
-> *Demo GIF is illustrative; actual appearance may vary.*
+> _Demo GIF is illustrative; actual appearance may vary._
 
 ## Requirements
 
@@ -32,8 +32,8 @@
 
 1. Add to your `~/.tmux.conf`:
    ```tmux
-set -g @plugin 'yourname/tmux-panehop'
-run '~/.tmux/plugins/tpm/tpm'
+   set -g @plugin 'yourname/tmux-panehop'
+   run '~/.tmux/plugins/tpm/tpm'
    ```
 2. Reload tmux configuration:
    ```
@@ -51,6 +51,7 @@ git clone https://github.com/yourname/tmux-panehop.git ~/.tmux/plugins/panehop
 ```
 
 Add to your `~/.tmux.conf`:
+
 ```tmux
 run-shell "~/.tmux/plugins/tmux-panehop/tmux-panehop.tmux"
 ```
