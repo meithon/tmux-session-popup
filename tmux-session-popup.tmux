@@ -30,6 +30,11 @@ fi
 tmux bind-key -n "$SESSION_SWITCHER_NEXT_KEY" run-shell "TMUX_SESSION_WIDGET_PATH=$WIDGET_PATH WIDGET_MODE=$WIDGET_MODE_OPT $PLUGIN_DIR/bin/tmux-session-switcher next"
 tmux bind-key -n "$SESSION_SWITCHER_PREV_KEY" run-shell "TMUX_SESSION_WIDGET_PATH=$WIDGET_PATH WIDGET_MODE=$WIDGET_MODE_OPT $PLUGIN_DIR/bin/tmux-session-switcher prev"
 
+# Some terminals don't emit a distinct C-S-Tab; add ISOLeftTab fallback when using that default
+if [[ "$SESSION_SWITCHER_PREV_KEY" == "C-S-Tab" ]]; then
+  tmux bind-key -n "C-ISOLeftTab" run-shell "TMUX_SESSION_WIDGET_PATH=$WIDGET_PATH WIDGET_MODE=$WIDGET_MODE_OPT $PLUGIN_DIR/bin/tmux-session-switcher prev"
+fi
+
 # Provide status-line format variable (does not overwrite status-right)
 if [[ -z "$(tmux show-option -gqv @session_status_format)" ]]; then
   tmux set-option -gq @session_status_format "#($PLUGIN_DIR/bin/tmux-session-status)"
