@@ -10,17 +10,17 @@ PLUGIN_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Read tmux options (fall back to defaults)
 SESSION_SWITCHER_NEXT_KEY="$(tmux show-option -gqv @session_switcher_next_key)"
 SESSION_SWITCHER_PREV_KEY="$(tmux show-option -gqv @session_switcher_prev_key)"
-WIDGET_PATH="$(tmux show-option -gqv @session_widget_path)"
 WIDGET_MODE_OPT="$(tmux show-option -gqv @session_switcher_widget_mode)"
+
+# Always set widget path to the bundled widget (prefer stable default)
+WIDGET_PATH="$PLUGIN_DIR/bin/tmux-session-widget"
+tmux set-option -gq @session_widget_path "$WIDGET_PATH"
 
 if [[ -z "$SESSION_SWITCHER_NEXT_KEY" ]]; then
   SESSION_SWITCHER_NEXT_KEY="$DEFAULT_NEXT_KEY"
 fi
 if [[ -z "$SESSION_SWITCHER_PREV_KEY" ]]; then
   SESSION_SWITCHER_PREV_KEY="$DEFAULT_PREV_KEY"
-fi
-if [[ -z "$WIDGET_PATH" ]]; then
-  WIDGET_PATH="$PLUGIN_DIR/bin/tmux-session-widget"
 fi
 if [[ -z "$WIDGET_MODE_OPT" ]]; then
   WIDGET_MODE_OPT="list"

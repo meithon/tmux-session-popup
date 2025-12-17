@@ -3,7 +3,7 @@ BINDIR := $(DESTDIR)$(PREFIX)/bin
 SHAREDIR := $(DESTDIR)$(PREFIX)/share/tmux-session-popup
 
 SCRIPTS := tmux-session-switcher tmux-session-widget tmux-zoxide-session
-TMUX_FILES := tmux-session-switcher.tmux tmux-session-switcher.plugin
+TMUX_FILES := tmux-session-switcher.tmux tmux-session-switcher.plugin tmux-session-popup.tmux
 
 .PHONY: install uninstall
 

@@ -1,4 +1,0 @@
-set -g @session_switcher_next_key "C-Tab"
-set -g @session_switcher_prev_key "C-S-Tab"
-
-run-shell "~/.tmux/plugins/tmux-session-popup/tmux-session-switcher.tmux"

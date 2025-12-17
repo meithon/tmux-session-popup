@@ -94,6 +94,12 @@ TPM 以外で手動ロードする場合:
 run-shell "~/.tmux/plugins/tmux-session-popup/tmux-session-switcher.tmux"
 ```
 
+TPM で自動ロードするときの挙動
+
+`set -g @plugin 'yourname/tmux-session-popup'` を設定すると、TPM がリポ直下の
+`tmux-session-popup.tmux` を自動で source します。その中から
+`tmux-session-switcher.tmux` を呼ぶので、追加の run-shell は不要です。
+
 ### 直接バインドで試す（TPMなし）
 
 ```tmux
