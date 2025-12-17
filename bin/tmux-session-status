@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+# Status-line friendly session indicator.
+# Uses tmux-session-widget to format output.
+
+SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WIDGET_PATH="$SCRIPT_DIR/tmux-session-widget"
+
+# Read mode: env > tmux option > default
+DEFAULT_MODE="compact"  # options: compact | dots | index | basename | name | truncated
+MODE="${SESSION_STATUS_MODE:-}"
+if [[ -z "$MODE" ]]; then
+  MODE="$(tmux show-option -gqv @session_status_mode)"
+fi
+if [[ -z "$MODE" ]]; then
+  MODE="$DEFAULT_MODE"
+fi
+
+# Load widget
+if [[ -f "$WIDGET_PATH" ]]; then
+  source "$WIDGET_PATH"
+else
+  echo "session-widget missing" >&2
+  exit 1
+fi
+
+# Map/validate mode
+case "$MODE" in
+  compact|dots|index|basename|name|truncated) ;;
+  *) MODE="$DEFAULT_MODE" ;;
+esac
+
+get_session_info "$MODE"

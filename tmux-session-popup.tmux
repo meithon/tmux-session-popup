@@ -29,3 +29,8 @@ fi
 # Bind keys
 tmux bind-key -n "$SESSION_SWITCHER_NEXT_KEY" run-shell "TMUX_SESSION_WIDGET_PATH=$WIDGET_PATH WIDGET_MODE=$WIDGET_MODE_OPT $PLUGIN_DIR/bin/tmux-session-switcher next"
 tmux bind-key -n "$SESSION_SWITCHER_PREV_KEY" run-shell "TMUX_SESSION_WIDGET_PATH=$WIDGET_PATH WIDGET_MODE=$WIDGET_MODE_OPT $PLUGIN_DIR/bin/tmux-session-switcher prev"
+
+# Provide status-line format variable (does not overwrite status-right)
+if [[ -z "$(tmux show-option -gqv @session_status_format)" ]]; then
+  tmux set-option -gq @session_status_format "#($PLUGIN_DIR/bin/tmux-session-status)"
+fi

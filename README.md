@@ -109,6 +109,20 @@ bind-key -n C-S-Tab  run-shell "WIDGET_MODE=dots ~/.local/bin/tmux-session-switc
 
 > `WIDGET_MODE` は `list`（デフォルト）か `dots` を指定できます。`TMUX_SESSION_WIDGET_PATH` を指定すれば別ウィジェットにも差し替え可。
 
+## ステータスバーにウィジェットを埋め込む
+
+プラグインが `@session_status_format` を自動セットします（デフォルトは compact 表示）。
+`status-right` などに挿入して使います。
+
+```tmux
+set -g status-right "#{@session_status_format} #[fg=colour8]| %H:%M"
+
+# 表示モードを変えたい場合（compact / dots / index / basename / name / truncated）
+set -g @session_status_mode dots
+```
+
+`@session_status_format` の実体は `#(~/.tmux/plugins/tmux-session-popup/bin/tmux-session-status)` です。
+
 ## Usage
 
 - Press `prefix + s` (default) to launch the pane switcher
