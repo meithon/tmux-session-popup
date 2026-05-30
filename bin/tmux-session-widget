@@ -5,17 +5,36 @@
 # Uses a cached session list to avoid repeated tmux calls and keeps
 # running even when a session has no session_path (falls back to name).
 
+SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 cached_sessions=()
 cached_paths=()
 
 refresh_session_cache() {
   cached_sessions=()
   cached_paths=()
-  # Format: "name:path" (path may be empty)
+
+  # Build name→path map from tmux
+  declare -A path_map
+  local name path
   while IFS=: read -r name path; do
-    cached_sessions+=("$name")
-    cached_paths+=("$path")
-  done < <(tmux list-sessions -F '#{session_name}:#{session_path}' | sort)
+    path_map["$name"]="$path"
+  done < <(tmux list-sessions -F '#{session_name}:#{session_path}' 2>/dev/null)
+
+  # Read sessions in custom order
+  local order_script="$SCRIPT_DIR/tmux-session-order"
+  if [[ -x "$order_script" ]]; then
+    while IFS= read -r name; do
+      cached_sessions+=("$name")
+      cached_paths+=("${path_map[$name]:-}")
+    done < <("$order_script" list)
+  else
+    # Fallback: alphabetical
+    while IFS=: read -r name path; do
+      cached_sessions+=("$name")
+      cached_paths+=("$path")
+    done < <(tmux list-sessions -F '#{session_name}:#{session_path}' | sort)
+  fi
 }
 
 get_session_count() {

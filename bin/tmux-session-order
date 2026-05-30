@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# Manage custom session ordering for tmux-session-popup.
+# Stores order in $XDG_STATE_HOME/tmux/session-order (fallback: ~/.local/state/tmux/session-order).
+# Sessions not in the file are appended alphabetically; stale entries are pruned on read.
+
+set -euo pipefail
+
+ORDER_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/tmux/session-order"
+SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+ensure_dir() { mkdir -p "$(dirname "$ORDER_FILE")"; }
+
+# Print all current session names in custom order.
+# Missing sessions (stale file entries) are silently dropped.
+get_ordered_sessions() {
+  ensure_dir
+
+  local -a all_sessions ordered remaining
+  local name path
+
+  # Collect tmux sessions as a name→path map
+  declare -A path_map
+  while IFS=: read -r name path; do
+    path_map["$name"]="$path"
+    all_sessions+=("$name")
+  done < <(tmux list-sessions -F '#{session_name}:#{session_path}' 2>/dev/null)
+
+  if [[ ${#all_sessions[@]} -eq 0 ]]; then
+    return 0
+  fi
+
+  # Build a lookup set for fast membership test
+  declare -A alive
+  for s in "${all_sessions[@]}"; do alive["$s"]=1; done
+
+  # Read custom order (keep only still-alive sessions)
+  if [[ -f "$ORDER_FILE" ]]; then
+    while IFS= read -r s; do
+      [[ -n "$s" ]] || continue
+      if [[ -n "${alive[$s]:-}" ]]; then
+        ordered+=("$s")
+        unset "alive[$s]"  # mark as placed
+      fi
+    done < "$ORDER_FILE"
+  fi
+
+  # Collect sessions not in the order file (alphabetical)
+  for s in "${all_sessions[@]}"; do
+    if [[ -n "${alive[$s]:-}" ]]; then
+      remaining+=("$s")
+    fi
+  done
+  # remaining is already alphabetical from list-sessions + sort
+
+  # Output: custom-ordered (still alive) → remaining (alphabetical)
+  local out=()
+  out+=("${ordered[@]}")
+  out+=("${remaining[@]}")
+
+  for s in "${out[@]}"; do
+    printf '%s\n' "$s"
+  done
+}
+
+# Swap current session with its neighbour.
+swap_session() {
+  local direction="$1"  # next or prev
+
+  local current
+  current=$(tmux display-message -p '#S')
+
+  local -a sessions
+  readarray -t sessions < <(get_ordered_sessions)
+
+  if [[ ${#sessions[@]} -lt 2 ]]; then
+    return 0
+  fi
+
+  # Find current index
+  local idx=-1
+  for i in "${!sessions[@]}"; do
+    if [[ "${sessions[$i]}" == "$current" ]]; then
+      idx=$i
+      break
+    fi
+  done
+
+  if [[ $idx -lt 0 ]]; then
+    return 0
+  fi
+
+  local total=${#sessions[@]}
+  local swap_with
+
+  case "$direction" in
+    next|down)
+      swap_with=$(( (idx + 1) % total ))
+      ;;
+    prev|up)
+      swap_with=$(( (idx - 1 + total) % total ))
+      ;;
+    *)
+      echo "Invalid direction: $direction" >&2
+      return 1
+      ;;
+  esac
+
+  # Swap in array
+  local tmp="${sessions[$idx]}"
+  sessions[$idx]="${sessions[$swap_with]}"
+  sessions[$swap_with]="$tmp"
+
+  # Write new order
+  ensure_dir
+  printf '%s\n' "${sessions[@]}" > "$ORDER_FILE"
+
+  # Force status-line redraw so the widget reflects the new order
+  tmux refresh-client -S
+}
+
+case "${1:-}" in
+  list)
+    get_ordered_sessions
+    ;;
+  swap-next|swap-down)
+    swap_session next
+    ;;
+  swap-prev|swap-up)
+    swap_session prev
+    ;;
+  *)
+    echo "Usage: $0 {list|swap-next|swap-prev}" >&2
+    exit 1
+    ;;
+esac

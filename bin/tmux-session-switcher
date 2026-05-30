@@ -18,11 +18,22 @@ if [[ -z "$WIDGET_MODE" ]]; then
   WIDGET_MODE="$DEFAULT_WIDGET_MODE"
 fi
 
+# --- Resolve ordered session list ---
+get_ordered_sessions() {
+  local order_script="$SCRIPT_DIR/tmux-session-order"
+  if [[ -x "$order_script" ]]; then
+    "$order_script" list
+  else
+    tmux list-sessions -F '#S' | sort
+  fi
+}
+
 # --- Helpers ---
 get_current_session_index() {
   local current_session
   current_session=$(tmux display-message -p '#S')
-  local sessions=($(tmux list-sessions -F '#S' | sort))
+  local -a sessions
+  readarray -t sessions < <(get_ordered_sessions)
   for i in "${!sessions[@]}"; do
     if [[ "${sessions[$i]}" == "$current_session" ]]; then
       echo "$i"
@@ -34,8 +45,13 @@ get_current_session_index() {
 
 get_session_at_index() {
   local idx=$1
-  local sessions=($(tmux list-sessions -F '#S' | sort))
+  local -a sessions
+  readarray -t sessions < <(get_ordered_sessions)
   local total=${#sessions[@]}
+  if [[ $total -eq 0 ]]; then
+    echo ""
+    return
+  fi
   if [[ $idx -lt 0 ]]; then
     idx=$((total - 1))
   elif [[ $idx -ge $total ]]; then
@@ -48,19 +64,21 @@ get_session_at_index() {
 case "$1" in
 next)
   cur=$(get_current_session_index)
-  sessions=($(tmux list-sessions -F '#S' | sort))
-  total=${#sessions[@]}
+  total=$(get_ordered_sessions | wc -l)
   new_idx=$(((cur + 1) % total))
   target=$(get_session_at_index "$new_idx")
-  tmux switch-client -t "$target" \; refresh-client -S
+  if [[ -n "$target" ]]; then
+    tmux switch-client -t "$target" \; refresh-client -S
+  fi
   ;;
 prev)
   cur=$(get_current_session_index)
-  sessions=($(tmux list-sessions -F '#S' | sort))
-  total=${#sessions[@]}
+  total=$(get_ordered_sessions | wc -l)
   new_idx=$(((cur - 1 + total) % total))
   target=$(get_session_at_index "$new_idx")
-  tmux switch-client -t "$target" \; refresh-client -S
+  if [[ -n "$target" ]]; then
+    tmux switch-client -t "$target" \; refresh-client -S
+  fi
   ;;
 *)
   echo "Usage: $0 {next|prev}" >&2
