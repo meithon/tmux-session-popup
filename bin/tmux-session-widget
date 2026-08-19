@@ -11,6 +11,24 @@ cached_sessions=()
 cached_paths=()
 
 refresh_session_cache() {
+  local cache_dir="${XDG_RUNTIME_DIR:-/tmp}/tmux-session-widget"
+  local cache_file="$cache_dir/sessions.cache"
+  local ttl=10
+
+  # Serve fresh cache: zero tmux round-trips on the status-interval path.
+  # The status line calls this every status-interval (3s); each tmux client
+  # spawn round-trips through the SAME server that handles keystrokes, so
+  # unbounded refresh = periodic input stall (see tmux-status-bar-input-lag).
+  if [[ -f "$cache_file" ]] && (( $(date +%s) - $(stat -c %Y "$cache_file") < ttl )); then
+    cached_sessions=()
+    cached_paths=()
+    while IFS=$'\t' read -r name path; do
+      cached_sessions+=("$name")
+      cached_paths+=("${path:-}")
+    done < "$cache_file"
+    return 0
+  fi
+
   cached_sessions=()
   cached_paths=()
 
@@ -35,6 +53,15 @@ refresh_session_cache() {
       cached_paths+=("$path")
     done < <(tmux list-sessions -F '#{session_name}:#{session_path}' | sort)
   fi
+
+  # Persist for other status-interval invocations
+  mkdir -p "$cache_dir"
+  local tmp="$cache_file.$$"
+  : > "$tmp"
+  for i in "${!cached_sessions[@]}"; do
+    printf '%s\t%s\n' "${cached_sessions[$i]}" "${cached_paths[$i]}" >> "$tmp"
+  done
+  mv -f "$tmp" "$cache_file"
 }
 
 get_session_count() {
