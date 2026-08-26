@@ -53,3 +53,6 @@ tmux bind-key -n "$SESSION_SWITCHER_SWAP_PREV_KEY" run-shell "$PLUGIN_DIR/bin/tm
 if [[ -z "$(tmux show-option -gqv @session_status_format)" ]]; then
   tmux set-option -gq @session_status_format "#($PLUGIN_DIR/bin/tmux-session-status)"
 fi
+# Refresh the session cache when a client attaches. The status widget may
+# otherwise reuse a cache created before all sessions were available.
+tmux set-hook -g client-attached "run-shell '$WIDGET_PATH refresh'"

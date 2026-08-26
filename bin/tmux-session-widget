@@ -213,8 +213,12 @@ get_session_info() {
       output+=" #[fg=cyan,bold]$padded_current/$total#[default]"
       echo "$output"
       ;;
+    refresh)
+      refresh_session_cache
+      tmux refresh-client -S
+      ;;
     *)
-      echo "Usage: $0 {basename|index|list|compact|name|truncated|dots}"
+      echo "Usage: $0 {basename|index|list|compact|name|truncated|dots|refresh}"
       return 1
       ;;
   esac
